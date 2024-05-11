@@ -1,0 +1,5 @@
+projeto_criptografia/
+│
+├── gestao_chaves.py # Geração, exportação e importação de chaves
+├── app.py # Aplicativo principal com interface de usuário
+└── utils.py # Funções auxiliares, como tratamento de erros e validações
