@@ -1,7 +1,6 @@
 #app.py
 import os
 import tkinter as tk
-from cryptography.hazmat.primitives import serialization
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from config import Config
 import hashlib
