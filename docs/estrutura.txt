@@ -1,0 +1,21 @@
+projeto_criptografia/
+│
+├─ src/
+│ ├── __init__.py
+│ ├─── app.py # Script principal do aplicativo para executar o programa
+│ ├─── gestao_chaves.py Funções de geração de chaves, importação/exportação
+│ └─── encriptar.py # Funcionalidades de criptografia e descriptografia
+│
+├─── testes/
+│ ├─── __init__.py
+│ ├─── teste_gestao_chaves.py
+│ └── teste_encriptar.py
+│
+├─── data/
+│ ├─── keys/ # Diretório para armazenar as chaves geradas
+│ └─── arquivos_criptografados/ # Diretório para armazenar arquivos criptografados
+│
+├─── docs/
+│ └── documentação.md
+│ └─── README.md
+│ └─── estrutura.txt
