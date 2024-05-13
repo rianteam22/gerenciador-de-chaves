@@ -1,10 +1,17 @@
+#app.py
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog
-from tkinter import ttk
+from cryptography.hazmat.primitives import serialization
+from tkinter import filedialog, messagebox, simpledialog, ttk
+from config import Config
+import hashlib
+
+
+Config.ensure_dir(Config.KEYS_DIR)
+Config.ensure_dir(Config.ENCRYPTED_FILES_DIR)
+
 from gestao_chaves import (
-    apagar_chave, carregar_chave_privada, carregar_chave_publica,
-    gerar_par_chaves, exportar_chave_publica, exportar_chave_privada,
+    apagar_chave, gerar_par_chaves, exportar_chave_publica, exportar_chave_privada,
     importar_chave_publica, importar_chave_privada, listar_chaves
 )
 
@@ -12,139 +19,138 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Trabalho 01 – Sistema de Gerenciamento de Chaves Públicas e Criptografia")
-        self.root.geometry("600x600")
-        self.keys_dir = os.path.join(os.path.dirname(__file__), 'keys')  # Define o diretório das chaves
-        
+        self.root.geometry("550x225")  # Slightly larger window for better layout
+        self.keys_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'keys')        
         self.setup_ui()
 
     def setup_ui(self):
-        """Setup the user interface with buttons and labels."""
-        frame = ttk.Frame(self.root, padding="10 10 10 10")
-        frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        ttk.Label(frame, text="Gerenciamento de Chaves").grid(column=1)
-        self.search_var = tk.StringVar()
-        ttk.Entry(frame, textvariable=self.search_var).grid(row=2, column=1, sticky=(tk.W, tk.E), padx=10)
-        ttk.Button(frame, text="Pesquisar Chaves", command=self.pesquisar_chaves).grid(row=1, column=1, sticky=(tk.W, tk.E), padx=10, pady=10)
-        ttk.Button(frame, text="Listar Todas as Chaves", command=lambda: self.listar_chaves(None)).grid(row=1, column=2, sticky=(tk.W, tk.E), padx=10, pady=10)
+        """Setup the user interface with frames for better organization."""
+        self.setup_key_management_ui()
+        self.setup_search_ui()
 
-        actions = [
-            ("Gerar Par de Chaves", self.gerar_chaves),
-            ("Exportar Chave Privada", self.exportar_chave_privada_interactive),
-            ("Exportar Chave Pública", self.exportar_chave_publica_interactive),
-            ("Importar Chave Privada", self.importar_chave_privada_interactive),
-            ("Importar Chave Pública", self.importar_chave_publica_interactive)
-        ]
-        for i, (label, action) in enumerate(actions, start=1):
-            ttk.Button(frame, text=label, command=action).grid(row=i, column=0, sticky=(tk.W, tk.E), padx=10, pady=10)
+    def setup_key_management_ui(self):
+        frame = ttk.LabelFrame(self.root, text="Key Management", padding="10 10 10 10")
+        frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
+
+        ttk.Button(frame, text="Generate and Show Keys", command=self.generate_and_show_keys).grid(row=0, column=0, padx=10, pady=5)
+        ttk.Button(frame, text="Import Private Key", command=self.importar_chave_privada_interactive).grid(row=0, column=1, padx=10, pady=5)
+        ttk.Button(frame, text="Import Public Key", command=self.importar_chave_publica_interactive).grid(row=0, column=2, padx=10, pady=5)
+
+
+    def setup_search_ui(self):
+        frame = ttk.LabelFrame(self.root, text="Search and List Keys", padding="10 10 10 10")
+        frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
         
-            
+        self.search_var = tk.StringVar()
+        ttk.Entry(frame, textvariable=self.search_var).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=10)
+        ttk.Button(frame, text="Search Keys", command=self.pesquisar_chaves).grid(row=0, column=1, padx=10, pady=10)
+        ttk.Button(frame, text="List All Keys", command=lambda: self.listar_chaves(None)).grid(row=0, column=2, padx=10, pady=10)
+
     def pesquisar_chaves(self):
-        """Mostrar uma lista de chaves armazenadas que correspondem ao termo de pesquisa."""
         termo_pesquisa = self.search_var.get()
         self.listar_chaves(termo_pesquisa)
 
     def listar_chaves(self, filtro=None):
-        """Mostrar uma lista de chaves armazenadas ao usuário e opções para apagar, com opção de filtro."""
         chaves = listar_chaves(self.keys_dir, filtro)
         if not chaves:
-            self.show_message("Nenhuma chave correspondente encontrada.")
+            self.show_message("No matching keys found.")
             return
         
         top = tk.Toplevel(self.root)
-        top.title("Chaves Armazenadas")
-        ttk.Label(top, text="Selecione uma chave para apagar ou veja detalhes:").pack()
+        top.title("Stored Keys")
+
+        frame = ttk.Frame(top)
+        frame.pack(pady=10)
+
+        ttk.Label(frame, text="Select a key to delete or view details:").pack()
+
+        # Function to delete a key and refresh the list
+        def delete_and_refresh(chave):
+            if apagar_chave(os.path.join(self.keys_dir, chave)):
+                messagebox.showinfo("Success", f"Key {chave} successfully deleted.")
+                top.destroy()
+                self.listar_chaves(filtro)  # Refresh the list
+            else:
+                messagebox.showerror("Error", f"Failed to delete {chave}.")
 
         for chave in chaves:
-            ttk.Button(top, text=chave, command=lambda c=chave: self.apagar_chave(os.path.join(self.keys_dir, c))).pack()
+            ttk.Button(frame, text=chave, command=lambda c=chave: delete_and_refresh(c)).pack()
 
-    def apagar_chave(self, path):
-        """Apagar a chave selecionada."""
-        if messagebox.askokcancel("Confirmar", "Você realmente deseja apagar esta chave?"):
-            if apagar_chave(path):
-                self.show_message("Chave apagada com sucesso.")
-            else:
-                self.show_error("Falha ao apagar chave.")
- 
     def ask_for_password(self, prompt):
-        """Ask user for password with validation."""
+        """Ask user for password with validation and hashing."""
         while True:
-            senha = simpledialog.askstring("Senha", prompt, show='*')
-            if not senha:
-                self.show_error("Nenhuma senha foi fornecida; a operação foi cancelada.")
+            password = simpledialog.askstring("Password", prompt, show='*')
+            if not password:
+                self.show_error("No password provided; operation cancelled.")
                 return None
-            if len(senha) < 8:
-                self.show_error("A senha deve ter pelo menos 8 caracteres.")
+            if len(password) < 8:
+                self.show_error("The password must be at least 8 characters long.")
                 continue
-            return senha
-
-    def gerar_chaves(self):
-        """Generate public and private keys with a password provided by the user."""
+            # Hashing the password before using it for encryption
+            hashed_password = hashlib.sha256(password.encode()).digest()
+            return hashed_password
+    
+    def generate_and_show_keys(self):
         senha = self.ask_for_password("Digite uma senha para encriptar a chave privada:")
         if senha is None:
-            return
+            return  # Cancela a operação se nenhuma senha for fornecida
         try:
-            gerar_par_chaves('minha_chave_privada.pem', 'minha_chave_publica.pem', senha)
-            self.show_message("Chaves geradas com sucesso!")
+            priv_key, pub_key, salt = gerar_par_chaves(senha)  # Agora passa a senha para a função de geração
+            self.show_keys_ui(priv_key, pub_key, salt)
         except Exception as e:
             self.show_error(f"Falha em gerar chaves: {str(e)}")
 
-    # Example of a refactored export function
-    def exportar_chave_privada_interactive(self):
-        """Interactively export a private key with user-selected file and password."""
-        senha = self.ask_for_password("Digite a senha para encriptar a chave privada:")
-        if senha is None:
-            return
-        private_key_path = filedialog.askopenfilename(title="Selecionar chave privada para exportar", filetypes=[("PEM files", "*.pem")])
-        if private_key_path:
-            try:
-                chave_privada = carregar_chave_privada(private_key_path, senha)
-                local_para_salvar = filedialog.asksaveasfilename(title="Salvar chave privada como", filetypes=[("PEM files", "*.pem")])
-                if local_para_salvar:
-                    exportar_chave_privada(chave_privada, local_para_salvar, senha)
-            except Exception as e:
-                self.show_error(f"Erro ao exportar chave privada: {str(e)}")
+    def show_keys_ui(self, priv_key, pub_key, salt):
+        key_window = tk.Toplevel(self.root)
+        key_window.title("Chaves Geradas")
+        key_window.geometry("700x820")
 
-    def exportar_chave_publica_interactive(self):
-        """Interactively export a public key with user-selected file."""
-        public_key_path = filedialog.askopenfilename(title="Selecionar chave pública para exportar", filetypes=[("PEM files", "*.pem")])
-        if public_key_path:
-            try:
-                chave_publica = carregar_chave_publica(public_key_path)
-                local_para_salvar = filedialog.asksaveasfilename(title="Salvar chave pública como", filetypes=[("PEM files", "*.pem")])
-                if local_para_salvar:
-                    exportar_chave_publica(chave_publica, local_para_salvar)
-                    self.show_message("Chave pública exportada com sucesso!")
-            except Exception as e:
-                self.show_error(f"Erro ao exportar chave pública: {str(e)}")
+        txt_priv = tk.Text(key_window, height=25, width=80)
+        txt_priv.insert(tk.END, priv_key.decode())  # Assuming priv_key is already a bytes object
+        txt_priv.pack(pady=10)
+
+        txt_pub = tk.Text(key_window, height=10, width=80)
+        txt_pub.insert(tk.END, pub_key.decode())  # Assuming pub_key is already a bytes object
+        txt_pub.pack(pady=10)
+
+        ttk.Button(key_window, text="Exportar Chave Privada", command=lambda: self.export_key(priv_key, "private", salt)).pack(pady=5)
+        ttk.Button(key_window, text="Exportar Chave Pública", command=lambda: self.export_key(pub_key, "public")).pack(pady=5)
+
+    def export_key(self, key, key_type, salt=None):
+        file_path = filedialog.asksaveasfilename(defaultextension=".pem", filetypes=[("PEM files", "*.pem")])
+        if file_path:
+            if key_type == "private":
+                exportar_chave_privada(key, file_path, salt)
+            elif key_type == "public":
+                exportar_chave_publica(key, file_path)
+            messagebox.showinfo("Sucesso", f"{key_type.capitalize()} key exported successfully.")
 
     def importar_chave_privada_interactive(self):
         """Interactively import a private key with user-selected file and password."""
-        private_key_path = filedialog.askopenfilename(title="Selecionar chave privada", filetypes=[("PEM files", "*.pem")])
+        private_key_path = filedialog.askopenfilename(title="Select Private Key", filetypes=[("PEM files", "*.pem")])
         if private_key_path:
-            password = simpledialog.askstring("Senha", "Digite a senha de sua chave privada:", show='*')
+            senha = self.ask_for_password("Enter a password to decrypt the private key:")
             try:
-                importar_chave_privada(private_key_path, password)
-                self.show_message("Chave privada importada com sucesso!")
+                chave_privada = importar_chave_privada(private_key_path, senha)
+                self.show_message("Private key imported successfully!")
             except Exception as e:
-                self.show_error(f"Erro ao importar chave privada: {str(e)}")
+                self.show_error(f"Error importing private key: {str(e)}")
 
     def importar_chave_publica_interactive(self):
         """Interactively import a public key with user-selected file."""
-        public_key_path = filedialog.askopenfilename(title="Selecionar chave pública", filetypes=[("PEM files", "*.pem")])
+        public_key_path = filedialog.askopenfilename(title="Select Public Key", filetypes=[("PEM files", "*.pem")])
         if public_key_path:
             try:
-                importar_chave_publica(public_key_path)
-                self.show_message("Chave pública importada com sucesso!")
+                chave_publica = importar_chave_publica(public_key_path)
+                self.show_message("Public key imported successfully!")
             except Exception as e:
-                self.show_error(f"Erro ao importar chave pública: {str(e)}")
-
+                self.show_error(f"Error importing public key: {str(e)}")
+                
     def show_message(self, message):
-        """Display a message box with an informational message."""
-        messagebox.showinfo("Mensagem", message)
+        messagebox.showinfo("Message", message)
 
     def show_error(self, message):
-        """Display an error message box."""
-        messagebox.showerror("Erro", message)
+        messagebox.showerror("Error", message)
 
 if __name__ == "__main__":
     root = tk.Tk()
