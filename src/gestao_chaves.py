@@ -6,45 +6,47 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 
-def gerar_par_chaves(nome_arquivo_chave_privada, nome_arquivo_chave_publica, senha):
+def criar_kdf(salt=None):
+    if salt is None:
+        salt = os.urandom(16)
+    
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    return kdf, salt
+
+def gerar_par_chaves(senha):
+    if not isinstance(senha, bytes):
+        raise ValueError("Senha must be bytes")
+    
     chave_privada = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
         backend=default_backend()
     )
-    chave_publica = chave_privada.public_key()  # Obter a chave pública a partir da chave privada
-    senha_bytes = senha.encode()
-    kdf, salt = criar_kdf(senha_bytes)
-    # Definir o caminho da pasta keys dentro da pasta src
-    base_path = os.path.dirname(__file__)  # Obtém o diretório onde o script está sendo executado
-    keys_dir = os.path.join(base_path, 'keys')
+    chave_publica = chave_privada.public_key()
 
-    # Verificar se o diretório 'keys' existe, se não, criá-lo
-    if not os.path.exists(keys_dir):
-        os.makedirs(keys_dir)
+    # Uso da função criar_kdf para derivar a chave de criptografia a partir da senha
+    kdf, salt = criar_kdf()  # Cria o KDF e obtém o salt
 
-    # Caminhos completos para salvar as chaves
-    chave_privada_path = os.path.join(keys_dir, nome_arquivo_chave_privada)
-    chave_publica_path = os.path.join(keys_dir, nome_arquivo_chave_publica)
+    # Criptografia da chave privada usando a chave derivada
+    chave_privada_criptografada = chave_privada.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.BestAvailableEncryption(kdf.derive(senha))
+    )
 
-    # Salvar chave privada em formato PEM
-    with open(chave_privada_path, 'wb') as chave_privada_arquivo:
-        chave_privada_arquivo.write(
-            chave_privada.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.BestAvailableEncryption(senha_bytes)
-            )
-        )
+    # Serialização da chave pública
+    chave_publica_serializada = chave_publica.public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
 
-    # Salvar chave pública em formato PEM
-    with open(chave_publica_path, 'wb') as chave_publica_arquivo:
-        chave_publica_arquivo.write(
-            chave_publica.public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo
-            )
-        )
+    return chave_privada_criptografada, chave_publica_serializada, salt  # Retorna as chaves e o salt
 
 def carregar_chave_publica(nome_arquivo):
     with open(nome_arquivo, 'rb') as arquivo:
@@ -71,24 +73,13 @@ def exportar_chave_publica(chave_publica, nome_arquivo):
     with open(nome_arquivo, 'wb') as arquivo:
         arquivo.write(pem)
         
-def criar_kdf(senha_bytes):
-    salt = os.urandom(16)
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=salt,
-        iterations=100000,
-        backend=default_backend()
-    )
-    return kdf, salt
 
-def exportar_chave_privada(chave_privada, nome_arquivo, senha):
-    senha_bytes = senha.encode()
-    kdf, salt = criar_kdf(senha_bytes)
+def exportar_chave_privada(chave_privada, nome_arquivo, senha, salt):
+    kdf, salt = criar_kdf(salt)
     pem = chave_privada.private_bytes(
         encoding=serialization.Encoding.PEM,
         format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.BestAvailableEncryption(senha_bytes)
+        encryption_algorithm=serialization.BestAvailableEncryption(kdf.derive(senha))
     )
     with open(nome_arquivo, 'wb') as arquivo:
         arquivo.write(salt)  # Salvar o salt no arquivo
