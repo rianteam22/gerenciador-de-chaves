@@ -9,6 +9,7 @@ import hashlib
 Config.ensure_dir(Config.KEYS_DIR)
 Config.ensure_dir(Config.ENCRYPTED_FILES_DIR)
 
+from cripto import criptografar_com_chave_publica, descriptografar_com_chave_privada
 from gestao_chaves import (
     apagar_chave, gerar_par_chaves, exportar_chave_publica, exportar_chave_privada,
     importar_chave_publica, importar_chave_privada, listar_chaves
@@ -18,7 +19,7 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Trabalho 01 – Sistema de Gerenciamento de Chaves Públicas e Criptografia")
-        self.root.geometry("550x225")  # Slightly larger window for better layout
+        self.root.geometry("535x610")  # Slightly larger window for better layout
         self.keys_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'keys')        
         self.setup_ui()
 
@@ -26,6 +27,8 @@ class App:
         """Setup the user interface with frames for better organization."""
         self.setup_key_management_ui()
         self.setup_search_ui()
+        self.setup_text_input_ui()
+        self.setup_cripto_ui()
 
     def setup_key_management_ui(self):
         frame = ttk.LabelFrame(self.root, text="Key Management", padding="10 10 10 10")
@@ -144,6 +147,59 @@ class App:
                 self.show_message("Public key imported successfully!")
             except Exception as e:
                 self.show_error(f"Error importing public key: {str(e)}")
+     
+    def setup_text_input_ui(self):
+        frame = ttk.LabelFrame(self.root, text="Input Text", padding="10 10 10 10")
+        frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
+        self.text_input = tk.Text(frame, height=10, width=40)
+        self.text_input.grid(row=0, column=0, padx=10, pady=10)
+        ttk.Button(frame, text="Save Text", command=self.save_text).grid(row=1, column=0, padx=10)
+
+    def save_text(self):
+        text = self.text_input.get("1.0", tk.END)
+        with open("temp_text.txt", "w") as file:
+            file.write(text)
+            
+    def choose_key(self):
+        keys = listar_chaves(self.keys_dir)
+        if not keys:
+            messagebox.showerror("Error", "No keys available.")
+            return None
+        key_file = filedialog.askopenfilename(initialdir=self.keys_dir, title="Select Key", filetypes=[("PEM files", "*.pem")])
+        return key_file
+
+    def salvar_arquivo(self, caminho, dados):
+        with open(caminho, 'wb') as file:
+            file.write(dados)
+        messagebox.showinfo("Sucesso", "Arquivo salvo com sucesso!")
+
+    def setup_cripto_ui(self):
+        frame = ttk.LabelFrame(self.root, text="Criptografia / Descriptografia", padding="10 10 10 10")
+        frame.grid(row=3, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
+        
+        ttk.Button(frame, text="Criptografar", command=self.executar_criptografia).grid(row=0, column=0, padx=10, pady=5)
+        ttk.Button(frame, text="Descriptografar", command=self.executar_descriptografia).grid(row=0, column=1, padx=10, pady=5)
+
+    def executar_criptografia(self):
+        arquivo = 'temp_text.txt'  # O caminho do arquivo temporário com texto salvo
+        chave = self.choose_key()  # Selecione a chave pública
+        if chave:
+            encrypted_data = criptografar_com_chave_publica(arquivo, chave)
+            save_path = filedialog.asksaveasfilename(defaultextension=".enc", title="Salvar Arquivo Criptografado")
+            print(f'Encripted data{encrypted_data}\n Save Path{save_path}')
+            if save_path:
+                self.salvar_arquivo(save_path, encrypted_data)
+
+    def executar_descriptografia(self):
+        arquivo = filedialog.askopenfilename(title="Selecionar Arquivo Criptografado")
+        chave = self.choose_key()  # Selecione a chave privada
+        if chave:
+            senha = self.ask_for_password("Digite a senha para descriptografar a chave:")
+            decrypted_data = descriptografar_com_chave_privada(arquivo, chave, senha)
+            save_path = filedialog.asksaveasfilename(defaultextension=".txt", title="Salvar Arquivo Descriptografado")
+            if save_path:
+                self.salvar_arquivo(save_path, decrypted_data)
+
                 
     def show_message(self, message):
         messagebox.showinfo("Message", message)
