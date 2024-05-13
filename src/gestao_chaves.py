@@ -47,43 +47,16 @@ def gerar_par_chaves(senha):
     )
 
     return chave_privada_criptografada, chave_publica_serializada, salt  # Retorna as chaves e o salt
-
-def carregar_chave_publica(nome_arquivo):
-    with open(nome_arquivo, 'rb') as arquivo:
-        chave_publica = serialization.load_pem_public_key(
-            arquivo.read(),
-            backend=default_backend()
-        )
-    return chave_publica
-
-def carregar_chave_privada(nome_arquivo, senha):
-    with open(nome_arquivo, 'rb') as arquivo:
-        chave_privada = serialization.load_pem_private_key(
-            arquivo.read(),
-            password=senha.encode(),
-            backend=default_backend()
-        )
-    return chave_privada
       
 def exportar_chave_publica(chave_publica, nome_arquivo):
-    pem = chave_publica.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
-    )
     with open(nome_arquivo, 'wb') as arquivo:
-        arquivo.write(pem)
+        arquivo.write(chave_publica)
         
 
-def exportar_chave_privada(chave_privada, nome_arquivo, senha, salt):
-    kdf, salt = criar_kdf(salt)
-    pem = chave_privada.private_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PrivateFormat.PKCS8,
-        encryption_algorithm=serialization.BestAvailableEncryption(kdf.derive(senha))
-    )
+def exportar_chave_privada(chave_privada, nome_arquivo, salt):
     with open(nome_arquivo, 'wb') as arquivo:
         arquivo.write(salt)  # Salvar o salt no arquivo
-        arquivo.write(pem)
+        arquivo.write(chave_privada)
         
 def importar_chave_publica(nome_arquivo):
     with open(nome_arquivo, 'rb') as arquivo:
@@ -94,15 +67,25 @@ def importar_chave_publica(nome_arquivo):
     return chave_publica
 
 def importar_chave_privada(nome_arquivo, senha):
-    senha_bytes = senha.encode()
     with open(nome_arquivo, 'rb') as arquivo:
+        salt = arquivo.read(16)  # Read the salt first
+        encrypted_key = arquivo.read()  # Then read the encrypted key
+        
+    # Recreate the KDF with the exact salt used during encryption
+    kdf, _ = criar_kdf(salt)
+    
+    try:
         chave_privada = serialization.load_pem_private_key(
-            arquivo.read(),
-            password=senha_bytes,
+            encrypted_key,
+            password=kdf.derive(senha),
             backend=default_backend()
         )
-    return chave_privada
-
+        print("Key successfully decrypted and loaded.")
+        return chave_privada
+    except Exception as e:
+        print(f"Failed to decrypt or load the key: {str(e)}")
+        return str(e)
+    
 def listar_chaves(diretorio_chaves, filtro=None):
     """Listar todas as chaves no diretório especificado, filtradas por um termo opcional."""
     try:
@@ -113,6 +96,7 @@ def listar_chaves(diretorio_chaves, filtro=None):
     except FileNotFoundError:
         print("Diretório não encontrado.")
         return []
+    
 def apagar_chave(nome_arquivo):
     """Apagar a chave especificada."""
     try:
