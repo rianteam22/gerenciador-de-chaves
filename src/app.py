@@ -19,34 +19,33 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("Trabalho 01 – Sistema de Gerenciamento de Chaves Públicas e Criptografia")
-        self.root.geometry("535x610")  # Slightly larger window for better layout
+        self.root.geometry("585x610")
         self.keys_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data', 'keys')        
         self.setup_ui()
 
     def setup_ui(self):
-        """Setup the user interface with frames for better organization."""
         self.setup_key_management_ui()
         self.setup_search_ui()
         self.setup_text_input_ui()
         self.setup_cripto_ui()
 
     def setup_key_management_ui(self):
-        frame = ttk.LabelFrame(self.root, text="Key Management", padding="10 10 10 10")
+        frame = ttk.LabelFrame(self.root, text="Gerenciamento de chaves", padding="10 10 10 10")
         frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
 
-        ttk.Button(frame, text="Generate and Show Keys", command=self.generate_and_show_keys).grid(row=0, column=0, padx=10, pady=5)
-        ttk.Button(frame, text="Import Private Key", command=self.importar_chave_privada_interactive).grid(row=0, column=1, padx=10, pady=5)
-        ttk.Button(frame, text="Import Public Key", command=self.importar_chave_publica_interactive).grid(row=0, column=2, padx=10, pady=5)
+        ttk.Button(frame, text="Gerar e mostrar chaves", command=self.generate_and_show_keys).grid(row=0, column=0, padx=10, pady=5)
+        ttk.Button(frame, text="Importar chave privada", command=self.importar_chave_privada_interactive).grid(row=0, column=1, padx=10, pady=5)
+        ttk.Button(frame, text="Importar chave pública", command=self.importar_chave_publica_interactive).grid(row=0, column=2, padx=10, pady=5)
 
 
     def setup_search_ui(self):
-        frame = ttk.LabelFrame(self.root, text="Search and List Keys", padding="10 10 10 10")
+        frame = ttk.LabelFrame(self.root, text="Pesquisa e listagem", padding="10 10 10 10")
         frame.grid(row=1, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
         
         self.search_var = tk.StringVar()
         ttk.Entry(frame, textvariable=self.search_var).grid(row=0, column=0, sticky=(tk.W, tk.E), padx=10)
-        ttk.Button(frame, text="Search Keys", command=self.pesquisar_chaves).grid(row=0, column=1, padx=10, pady=10)
-        ttk.Button(frame, text="List All Keys", command=lambda: self.listar_chaves(None)).grid(row=0, column=2, padx=10, pady=10)
+        ttk.Button(frame, text="Chaves de pesquisa", command=self.pesquisar_chaves).grid(row=0, column=1, padx=10, pady=10)
+        ttk.Button(frame, text="Listar todas as chaves", command=lambda: self.listar_chaves(None)).grid(row=0, column=2, padx=10, pady=10)
 
     def pesquisar_chaves(self):
         termo_pesquisa = self.search_var.get()
@@ -55,7 +54,7 @@ class App:
     def listar_chaves(self, filtro=None):
         chaves = listar_chaves(self.keys_dir, filtro)
         if not chaves:
-            self.show_message("No matching keys found.")
+            self.show_message("Não foram encontradas chaves correspondentes.")
             return
         
         top = tk.Toplevel(self.root)
@@ -64,31 +63,29 @@ class App:
         frame = ttk.Frame(top)
         frame.pack(pady=10)
 
-        ttk.Label(frame, text="Select a key to delete or view details:").pack()
+        ttk.Label(frame, text="Selecione uma tecla para excluir ou visualizar detalhes:").pack()
 
         # Function to delete a key and refresh the list
         def delete_and_refresh(chave):
             if apagar_chave(os.path.join(self.keys_dir, chave)):
-                messagebox.showinfo("Success", f"Key {chave} successfully deleted.")
+                messagebox.showinfo("Sucesso", f"Chave {chave} excluída com sucesso.")
                 top.destroy()
                 self.listar_chaves(filtro)  # Refresh the list
             else:
-                messagebox.showerror("Error", f"Failed to delete {chave}.")
+                messagebox.showerror("Erro", f"Falha ao excluir {chave}.")
 
         for chave in chaves:
             ttk.Button(frame, text=chave, command=lambda c=chave: delete_and_refresh(c)).pack()
 
     def ask_for_password(self, prompt):
-        """Ask user for password with validation and hashing."""
         while True:
-            password = simpledialog.askstring("Password", prompt, show='*')
+            password = simpledialog.askstring("Senha", prompt, show='*')
             if not password:
-                self.show_error("No password provided; operation cancelled.")
+                self.show_error("Nenhuma senha fornecida; operação cancelada.")
                 return None
             if len(password) < 8:
-                self.show_error("The password must be at least 8 characters long.")
+                self.show_error("A senha deve ter pelo menos 8 caracteres.")
                 continue
-            # Hashing the password before using it for encryption
             hashed_password = hashlib.sha256(password.encode()).digest()
             return hashed_password
     
@@ -128,10 +125,9 @@ class App:
             messagebox.showinfo("Sucesso", f"{key_type.capitalize()} key exported successfully.")
 
     def importar_chave_privada_interactive(self):
-        """Interactively import a private key with user-selected file and password."""
-        private_key_path = filedialog.askopenfilename(title="Select Private Key", filetypes=[("PEM files", "*.pem")])
+        private_key_path = filedialog.askopenfilename(title="Selecione Chave Privada", filetypes=[("PEM files", "*.pem")])
         if private_key_path:
-            senha = self.ask_for_password("Enter a password to decrypt the private key:")
+            senha = self.ask_for_password("Digite uma senha para descriptografar a chave privada:")
             try:
                 chave_privada = importar_chave_privada(private_key_path, senha)
                 self.show_message("Private key imported successfully!")
@@ -144,16 +140,16 @@ class App:
         if public_key_path:
             try:
                 chave_publica = importar_chave_publica(public_key_path)
-                self.show_message("Public key imported successfully!")
+                self.show_message("A chave pública foi importada com sucesso!")
             except Exception as e:
-                self.show_error(f"Error importing public key: {str(e)}")
+                self.show_error(f"Erro ao importar a chave pública: {str(e)}")
      
     def setup_text_input_ui(self):
-        frame = ttk.LabelFrame(self.root, text="Input Text", padding="10 10 10 10")
+        frame = ttk.LabelFrame(self.root, text="Texto de entrada", padding="10 10 10 10")
         frame.grid(row=2, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=10, pady=10)
         self.text_input = tk.Text(frame, height=10, width=40)
         self.text_input.grid(row=0, column=0, padx=10, pady=10)
-        ttk.Button(frame, text="Save Text", command=self.save_text).grid(row=1, column=0, padx=10)
+        ttk.Button(frame, text="Salvar texto", command=self.save_text).grid(row=1, column=0, padx=10)
 
     def save_text(self):
         text = self.text_input.get("1.0", tk.END)
@@ -163,7 +159,7 @@ class App:
     def choose_key(self):
         keys = listar_chaves(self.keys_dir)
         if not keys:
-            messagebox.showerror("Error", "No keys available.")
+            messagebox.showerror("Erro", "Não há chaves disponíveis.")
             return None
         key_file = filedialog.askopenfilename(initialdir=self.keys_dir, title="Select Key", filetypes=[("PEM files", "*.pem")])
         return key_file
