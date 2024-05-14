@@ -1,80 +1,82 @@
+import sys
 import unittest
 import os
-from cryptography.hazmat.primitives import serialization
-import hashlib
 
-import sys
-import os
-
-# Assuming your test script is in the 'testes' directory and your modules are in the 'src' directory.
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
 
-
-from gestao_chaves import (criar_kdf, gerar_par_chaves, carregar_chave_publica,
-                           carregar_chave_privada, exportar_chave_publica,
-                           exportar_chave_privada, importar_chave_publica,
-                           importar_chave_privada, listar_chaves, apagar_chave)
+from gestao_chaves import (
+    gerar_par_chaves, exportar_chave_publica, exportar_chave_privada,
+    importar_chave_publica, importar_chave_privada, listar_chaves, apagar_chave
+)
 
 class TestGestaoChaves(unittest.TestCase):
-    def test_criar_kdf(self):
-        """Test if KDF and salt are created properly."""
-        kdf, salt = criar_kdf()
-        self.assertIsNotNone(kdf)
-        self.assertEqual(len(salt), 16)  # Assuming salt should be 16 bytes
+    @classmethod
+    def setUpClass(cls):
+        cls.senha = b'senhaforte'
+        cls.diretorio_chaves = 'test_keys'
+        os.makedirs(cls.diretorio_chaves, exist_ok=True)
 
-    def test_gerar_par_chaves(self):
-        """Test key generation and encryption."""
-        senha = 'test_password'
-        hashed_password = hashlib.sha256(senha.encode()).digest()
-        priv_key, pub_key, salt = gerar_par_chaves(hashed_password)
-        self.assertIsNotNone(priv_key)
-        self.assertIsNotNone(pub_key)
-        self.assertEqual(len(salt), 16)
+    def test_geracao_e_armazenamento_de_chaves(self):
+        """
+        Objetivo: Testar a geração de um par de chaves e seu armazenamento em arquivos.
+        
+        Processo: Gera um par de chaves usando uma senha pré-definida e verifica se as 
+        chaves privada e pública são geradas corretamente. Em seguida, as chaves são 
+        exportadas para arquivos e verifica-se a existência desses arquivos para confirmar 
+        que foram salvos corretamente.
+        """
+        privada_criptografada, publica_serializada, salt = gerar_par_chaves(self.senha)
+        self.assertIsNotNone(privada_criptografada)
+        self.assertIsNotNone(publica_serializada)
+        self.assertIsNotNone(salt)
 
-    def test_carregar_chave_publica(self):
-        """Test loading a public key from a file."""
-        # Mocking file operations would be required here
-        pass
+        caminho_priv = os.path.join(self.diretorio_chaves, 'privada.pem')
+        caminho_pub = os.path.join(self.diretorio_chaves, 'publica.pem')
+        exportar_chave_privada(privada_criptografada, caminho_priv, salt)
+        exportar_chave_publica(publica_serializada, caminho_pub)
 
-    def test_carregar_chave_privada(self):
-        """Test loading a private key from a file with a password."""
-        # Mocking file operations would be required here
-        pass
+        self.assertTrue(os.path.exists(caminho_priv))
+        self.assertTrue(os.path.exists(caminho_pub))
 
-    def test_exportar_chave_publica(self):
-        """Test if public key is exported correctly."""
-        # This would require mocking file operations
-        pass
+    def test_importacao_de_chaves(self):
+        """
+        Objetivo: Testar a importação das chaves públicas e privadas a partir de arquivos.
+        
+        Processo: Importa as chaves a partir dos arquivos gerados anteriormente e verifica
+        se os objetos de chave correspondentes são criados sem erros, garantindo que a importação
+        foi bem-sucedida.
+        """
+        caminho_priv = os.path.join(self.diretorio_chaves, 'privada.pem')
+        caminho_pub = os.path.join(self.diretorio_chaves, 'publica.pem')
+        
+        chave_publica = importar_chave_publica(caminho_pub)
+        chave_privada = importar_chave_privada(caminho_priv, self.senha)
 
-    def test_exportar_chave_privada(self):
-        """Test if private key is exported correctly with encryption."""
-        # This would require mocking file operations
-        pass
+        self.assertIsNotNone(chave_publica)
+        self.assertIsNotNone(chave_privada)
 
-    def test_importar_chave_publica(self):
-        """Test public key import functionality."""
-        # This would require mocking file operations
-        pass
+    def test_listar_e_apagar_chaves(self):
+        """
+        Objetivo: Testar a listagem e a exclusão de chaves armazenadas em um diretório.
+        
+        Processo: Lista todas as chaves no diretório de teste para verificar se as chaves
+        esperadas estão presentes. Em seguida, remove uma das chaves e verifica se a chave
+        foi efetivamente excluída do diretório.
+        """
+        chaves = listar_chaves(self.diretorio_chaves)
+        self.assertIn('privada.pem', chaves)
+        self.assertIn('publica.pem', chaves)
 
-    def test_importar_chave_privada(self):
-        """Test private key import functionality."""
-        # This would require mocking file operations
-        pass
+        apagar_chave(os.path.join(self.diretorio_chaves, 'publica.pem'))
+        chaves_apos_remocao = listar_chaves(self.diretorio_chaves)
+        self.assertNotIn('publica.pem', chaves_apos_remocao)
 
-    def test_listar_chaves(self):
-        """Test listing of keys in a directory."""
-        os.mkdir('test_keys')
-        open('test_keys/test_key.pem', 'a').close()  # Create a dummy .pem file
-        result = listar_chaves('test_keys')
-        self.assertIn('test_key.pem', result)
-        os.remove('test_keys/test_key.pem')  # Clean up
-        os.rmdir('test_keys')
-
-    def test_apagar_chave(self):
-        """Test the deletion of a key file."""
-        open('test_delete.pem', 'a').close()
-        self.assertTrue(apagar_chave('test_delete.pem'))
-        self.assertFalse(os.path.exists('test_delete.pem'))
+    @classmethod
+    def tearDownClass(cls):
+        # Limpeza: Remove todos os arquivos e diretórios criados
+        for file in os.listdir(cls.diretorio_chaves):
+            os.remove(os.path.join(cls.diretorio_chaves, file))
+        os.rmdir(cls.diretorio_chaves)
 
 if __name__ == '__main__':
     unittest.main()
